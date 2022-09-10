@@ -69,7 +69,7 @@ Another way of find out the version is using the Rest API.
 >![](/assets/images/htb-writeup-ready/gitlab4.png)
 ```bash
 ❯ curl --header "PRIVATE-TOKEN: HXmTosC6DzLDSYQxzvic" 10.129.227.132:5080/api/v4/version | jq '.["version"]'
-{"version":"11.4.7","revision":"98f8423"}
+{"version":"11.4.7"}
 ```
 
 Now, we have some ways to gain a shell.
