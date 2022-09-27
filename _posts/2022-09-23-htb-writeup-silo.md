@@ -1,7 +1,7 @@
 ---
 layout: single
 title: Silo - Hack The Box
-excerpt: "A vulnerable instance of Gitlab to obtain a shell. Mount the host filesystem within the container to access the root flag" 
+excerpt: "Interesting machine that allows you to do things in a automated way or manually. I have learned about manage files in Oracle and the usage of Volatility"
 date: 2022-09-24
 classes: wide
 header:
