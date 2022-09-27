@@ -10,6 +10,7 @@ header:
   icon: /assets/images/hackthebox.webp
 categories:
   - hackthebox
+  - forensics
 tags:
   - ODAT
   - Oracle
