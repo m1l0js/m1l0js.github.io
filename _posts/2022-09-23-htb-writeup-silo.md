@@ -304,8 +304,6 @@ PL/SQL procedure successfully completed.
 
 For a better shell, let's use nishang.
 ```bash
-git clone https://github.com/samratashok/nishang
-❯ ls
 ❯ git clone https://github.com/samratashok/nishang
 Cloning into 'nishang'...
 remote: Enumerating objects: 1699, done.
