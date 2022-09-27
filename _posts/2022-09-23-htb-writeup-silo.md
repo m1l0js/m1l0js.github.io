@@ -429,8 +429,6 @@ SILO-20180105-221806.dmp: MS Windows 64bit crash dump, full dump, 261996 pages
 
 We will use Volatility to analyze this file. You could search more info about this tool in sites like [this](https://www.varonis.com/blog/how-to-use-volatility) one or [this](https://blog.onfvp.com/post/volatility-cheatsheet/)
 
-```bash```
-
 ```bash
 ❯ python3 volatility3/vol.py -f SILO-20180105-221806.dmp  windows.hashdump.Hashdump
 Volatility 3 Framework 2.4.0
