@@ -15,12 +15,12 @@ tags:
   - Oracle
   - Metasploit
   - sqlplus64
-  - 
+  - Volatility
 ---
 
 ![](/assets/images/htb-writeup-silo/silo_logo.png)
 
-We need to upload a file and execute it to gain a privileged shell.
+Interesting machine that allows you to do things in a automated way or manually. I have learned about manage files in Oracle and the usage of Volatility.
 
 ## Portscan
 ```bash
