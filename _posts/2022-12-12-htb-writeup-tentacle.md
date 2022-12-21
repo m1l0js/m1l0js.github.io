@@ -1,7 +1,7 @@
 ---
 layout: single
 title: Tentacle - Hack The Box
-excerpt: "Using squad proxy to access an internal network. Exploit an OpenSMTP server. SSH authentication with Kerberos. Backup script to access as another user. KeyTab file to privesc."
+excerpt: "Using squid proxy to access an internal network. Exploit an OpenSMTP server. SSH authentication with Kerberos. Backup script to access as another user. KeyTab file to privesc."
 date: 2022-12-21
 classes: wide
 header:
