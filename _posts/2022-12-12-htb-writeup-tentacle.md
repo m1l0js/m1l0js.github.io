@@ -273,16 +273,6 @@ http 127.0.0.1 3128
 http 10.197.243.77 3128
 ```
 
-```bash
-❯ proxychains nmap -sT -Pn -n -v 10.129.202.147 -p22
-(SNIP)
-[proxychains] Strict chain  ...  10.129.202.147:3128  ...  127.0.0.1:3128  ...  10.197.243.77:3128  ...  10.197.243.31:23 <--denied
-[proxychains] Strict chain  ...  10.129.202.147:3128  ...  127.0.0.1:3128  ...  10.197.243.77:3128  ...  10.197.243.31:995 <--denied
-[proxychains] Strict chain  ...  10.129.202.147:3128  ...  127.0.0.1:3128  ...  10.197.243.77:3128  ...  10.197.243.31:53  ...  OK
-Discovered open port 53/tcp on 10.197.243.31
-(SNIP)
-```
-
 Using our script
 ```bash
 ❯ cat portScannerWithProxychains.sh
